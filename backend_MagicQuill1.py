@@ -145,8 +145,9 @@ def generate(ckpt_name, total_mask, original_image, add_color_image, add_edge_im
         progress
     )
 
+    latent_samples_base64 = tensor_to_base64(latent_samples)
     final_image_base64 = tensor_to_base64(final_image)
-    return final_image_base64
+    return final_image_base64, latent_samples_base64
 
 def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, edge_strength, color_strength, inpaint_strength, seed, steps, cfg, sampler_name, scheduler):
     if seed == -1:
@@ -154,7 +155,7 @@ def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, 
     ms_data = x['from_frontend']
     positive_prompt = x['from_backend']['prompt']
     stroke_as_edge = "enable"
-    res = generate(
+    res, latent_samples_base64 = generate(
         ckpt_name,
         ms_data['total_mask'],
         ms_data['original_image'],
@@ -176,6 +177,7 @@ def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, 
         scheduler
     )
     x["from_backend"]["generated_image"] = res
+    x["from_backend"]["latent_samples"] = latent_samples_base64
     global AUTO_SAVE
     if AUTO_SAVE:
         auto_save_generated_image(res, ms_data)
@@ -390,5 +392,5 @@ async def auto_add_brush(request: Request):
 # app = gr.mount_gradio_app(app, demo, "/")
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=7860)
     
+    uvicorn.run(app, host="0.0.0.0", port=7860)
