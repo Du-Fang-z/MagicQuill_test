@@ -145,9 +145,8 @@ def generate(ckpt_name, total_mask, original_image, add_color_image, add_edge_im
         progress
     )
 
-    latent_samples_base64 = tensor_to_base64(latent_samples)
     final_image_base64 = tensor_to_base64(final_image)
-    return final_image_base64, latent_samples_base64
+    return final_image_base64
 
 def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, edge_strength, color_strength, inpaint_strength, seed, steps, cfg, sampler_name, scheduler):
     if seed == -1:
@@ -155,7 +154,7 @@ def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, 
     ms_data = x['from_frontend']
     positive_prompt = x['from_backend']['prompt']
     stroke_as_edge = "enable"
-    res, latent_samples_base64 = generate(
+    res = generate(
         ckpt_name,
         ms_data['total_mask'],
         ms_data['original_image'],
@@ -177,191 +176,10 @@ def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, 
         scheduler
     )
     x["from_backend"]["generated_image"] = res
-    x["from_backend"]["latent_samples"] = latent_samples_base64
     global AUTO_SAVE
     if AUTO_SAVE:
         auto_save_generated_image(res, ms_data)
     return x
-
-# def auto_save_generated_image(res):
-#     img_str = res
-#     if img_str.startswith("data:image/png;base64,"):
-#         img_str = img_str.split(",")[1]
-#     img_data = base64.b64decode(img_str)
-#     img = Image.open(io.BytesIO(img_data))
-    
-#     os.makedirs("output", exist_ok=True)
-    
-#     timestamp = time.strftime("%Y%m%d_%H%M%S")
-#     save_path = os.path.join("output", f"magicquill_{timestamp}.png")
-#     img.save(save_path)
-#     print(f"Image saved to: {save_path}")
-
-
-def auto_save_generated_image(res, ms_data=None):
-    # 保存最终生成图像
-    img_str = res
-    if img_str.startswith("data:image/png;base64,"):
-        img_str = img_str.split(",")[1]
-    img_data = base64.b64decode(img_str)
-    img = Image.open(io.BytesIO(img_data))
-
-    os.makedirs("output", exist_ok=True)
-    
-    timestamp = time.strftime("%Y%m%d_%H%M%S")
-    save_path = os.path.join("output", f"magicquill_{timestamp}.png")
-    img.save(save_path)
-    print(f"Image saved to: {save_path}")
-
-    # 保存 ms_data 中的图像字段
-    if ms_data:
-        for key in ["original_image", "add_color_image", "add_edge_image", "remove_edge_image", "total_mask"]:
-            img_str = ms_data.get(key)
-            if img_str:
-                try:
-                    if img_str.startswith("data:image"):
-                        img_str = img_str.split(",")[1]
-                    img_data = base64.b64decode(img_str)
-                    img = Image.open(io.BytesIO(img_data))
-                    save_path = os.path.join("output", f"{key}_{timestamp}.png")
-                    img.save(save_path)
-                    print(f"{key} saved to: {save_path}")
-                except Exception as e:
-                    print(f"Failed to save {key}: {e}")
-
-# css = '''
-# .row {
-#     width: 90%;
-#     margin: auto;
-# }
-# footer {
-#     visibility: 
-#     hidden
-# }
-# '''
-
-# with gr.Blocks(css=css) as demo:
-#     with gr.Row(elem_classes="row"):
-#         ms = MagicQuill()
-#     with gr.Row(elem_classes="row"):
-#         with gr.Column():
-#             btn = gr.Button("Run", variant="primary")
-#         with gr.Column():
-#             with gr.Accordion("parameters", open=False):
-#                 ckpt_name = gr.Dropdown(
-#                     label="Base Model Name",
-#                     choices=folder_paths.get_filename_list("checkpoints"),
-#                     value=os.path.join('SD1.5', 'realisticVisionV60B1_v51VAE.safetensors'),
-#                     interactive=True
-#                 )
-#                 auto_save_checkbox = gr.Checkbox(
-#                     label="Auto Save",
-#                     value=False,
-#                     interactive=True
-#                 )
-#                 resolution_slider = gr.Slider(
-#                     label="Resolution (Please update this before you upload the image ;).)",
-#                     minimum=256,
-#                     maximum=2048,
-#                     value=512,
-#                     step=64,
-#                     interactive=True
-#                 )
-#                 negative_prompt = gr.Textbox(
-#                     label="Negative Prompt",
-#                     value="",
-#                     interactive=True
-#                 )
-#                 # stroke_as_edge = gr.Radio(
-#                 #     label="Stroke as Edge",
-#                 #     choices=['enable', 'disable'],
-#                 #     value='enable',
-#                 #     interactive=True
-#                 # )
-#                 fine_edge = gr.Radio(
-#                     label="Fine Edge",
-#                     choices=['enable', 'disable'],
-#                     value='disable',
-#                     interactive=True
-#                 )
-#                 grow_size = gr.Slider(
-#                     label="Grow Size",
-#                     minimum=0,
-#                     maximum=100,
-#                     value=15,
-#                     step=1,
-#                     interactive=True
-#                 )
-#                 edge_strength = gr.Slider(
-#                     label="Edge Strength",
-#                     minimum=0.0,
-#                     maximum=5.0,
-#                     value=0.55,
-#                     step=0.01,
-#                     interactive=True
-#                 )
-#                 color_strength = gr.Slider(
-#                     label="Color Strength",
-#                     minimum=0.0,
-#                     maximum=5.0,
-#                     value=0.55,
-#                     step=0.01,
-#                     interactive=True
-#                 )
-#                 inpaint_strength = gr.Slider(
-#                     label="Inpaint Strength",
-#                     minimum=0.0,
-#                     maximum=5.0,
-#                     value=1.0,
-#                     step=0.01,
-#                     interactive=True
-#                 )
-#                 seed = gr.Number(
-#                     label="Seed",
-#                     value=-1,
-#                     precision=0,
-#                     interactive=True
-#                 )
-#                 steps = gr.Slider(
-#                     label="Steps",
-#                     minimum=1,
-#                     maximum=50,
-#                     value=20,
-#                     interactive=True
-#                 )
-#                 cfg = gr.Slider(
-#                     label="CFG",
-#                     minimum=0.0,
-#                     maximum=100.0,
-#                     value=5.0,
-#                     step=0.1,
-#                     interactive=True
-#                 )
-#                 sampler_name = gr.Dropdown(
-#                     label="Sampler Name",
-#                     choices=["euler", "euler_ancestral", "heun", "heunpp2","dpm_2", "dpm_2_ancestral", "lms", "dpm_fast", "dpm_adaptive", "dpmpp_2s_ancestral", "dpmpp_sde", "dpmpp_sde_gpu", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_2m_sde_gpu", "dpmpp_3m_sde", "dpmpp_3m_sde_gpu", "ddpm", "lcm", "ddim", "uni_pc", "uni_pc_bh2"],
-#                     value='euler_ancestral',
-#                     interactive=True
-#                 )
-#                 scheduler = gr.Dropdown(
-#                     label="Scheduler",
-#                     choices=["normal", "karras", "exponential", "sgm_uniform", "simple", "ddim_uniform"],
-#                     value='karras',
-#                     interactive=True
-#                 )
-
-#         def update_auto_save(value):
-#             global AUTO_SAVE
-#             AUTO_SAVE = value
-            
-#         def update_resolution(value):
-#             global RES
-#             RES = value
-
-#         auto_save_checkbox.change(fn=update_auto_save, inputs=[auto_save_checkbox])
-#         resolution_slider.change(fn=update_resolution, inputs=[resolution_slider])
-#         btn.click(generate_image_handler, inputs=[ms, ckpt_name, negative_prompt, fine_edge, grow_size, edge_strength, color_strength, inpaint_strength, seed, steps, cfg, sampler_name, scheduler], outputs=ms)
-
 
 app = FastAPI()
 
@@ -388,9 +206,6 @@ async def auto_add_brush(request: Request):
 
     return JSONResponse(content=result)
 
-
-# app = gr.mount_gradio_app(app, demo, "/")
-
 if __name__ == "__main__":
-    
     uvicorn.run(app, host="0.0.0.0", port=7860)
+    
