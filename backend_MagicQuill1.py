@@ -1,7 +1,7 @@
 import subprocess
 import os
 import gradio as gr
-import os
+import gc
 from gradio_magicquill import MagicQuill
 import random
 import torch
@@ -23,8 +23,16 @@ from fastapi.responses import JSONResponse
 AUTO_SAVE = False
 RES = 512
 
-# llavaModel = LLaVAModel()
-scribbleColorEditModel = ScribbleColorEditModel()
+
+def load_model():
+    model = ScribbleColorEditModel()
+    return model
+
+def unload_model(model):
+    del model
+    torch.cuda.empty_cache()
+    gc.collect()
+
 
 def tensor_to_base64(tensor):
     tensor = tensor.squeeze(0) * 255.
@@ -114,7 +122,7 @@ def guess_prompt_handler(original_image, add_color_image, add_edge_image):
     res = guess(original_image_tensor, add_color_image_tensor, add_edge_mask)
     return res
 
-def generate(ckpt_name, total_mask, original_image, add_color_image, add_edge_image, remove_edge_image, positive_prompt, negative_prompt, grow_size, stroke_as_edge, fine_edge, edge_strength, color_strength, inpaint_strength, seed, steps, cfg, sampler_name, scheduler):
+def generate(model2, ckpt_name, total_mask, original_image, add_color_image, add_edge_image, remove_edge_image, positive_prompt, negative_prompt, grow_size, stroke_as_edge, fine_edge, edge_strength, color_strength, inpaint_strength, seed, steps, cfg, sampler_name, scheduler):
     add_color_image, original_image, total_mask, add_edge_mask, remove_edge_mask = prepare_images_and_masks(total_mask, original_image, add_color_image, add_edge_image, remove_edge_image)
     progress = None
     if torch.sum(remove_edge_mask).item() > 0 and torch.sum(add_edge_mask).item() == 0:
@@ -122,7 +130,7 @@ def generate(ckpt_name, total_mask, original_image, add_color_image, add_edge_im
             positive_prompt = "empty scene"
         edge_strength /= 3.
 
-    latent_samples, final_image, lineart_output, color_output = scribbleColorEditModel.process(
+    latent_samples, final_image, lineart_output, color_output = model2.process(
         ckpt_name,
         original_image, 
         add_color_image, 
@@ -148,13 +156,14 @@ def generate(ckpt_name, total_mask, original_image, add_color_image, add_edge_im
     final_image_base64 = tensor_to_base64(final_image)
     return final_image_base64
 
-def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, edge_strength, color_strength, inpaint_strength, seed, steps, cfg, sampler_name, scheduler):
+def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, edge_strength, color_strength, inpaint_strength, seed, steps, cfg, sampler_name, scheduler, model1):
     if seed == -1:
         seed = random.randint(0, 2**32 - 1)
     ms_data = x['from_frontend']
     positive_prompt = x['from_backend']['prompt']
     stroke_as_edge = "enable"
     res = generate(
+        model1,
         ckpt_name,
         ms_data['total_mask'],
         ms_data['original_image'],
@@ -176,9 +185,6 @@ def generate_image_handler(x, ckpt_name, negative_prompt, fine_edge, grow_size, 
         scheduler
     )
     x["from_backend"]["generated_image"] = res
-    global AUTO_SAVE
-    if AUTO_SAVE:
-        auto_save_generated_image(res, ms_data)
     return x
 
 app = FastAPI()
@@ -187,22 +193,29 @@ app = FastAPI()
 @app.post("/magic_quill/auto_add_brush")
 async def auto_add_brush(request: Request):
     x = await request.json()
+    model3 = load_model()
     # 调用生成函数
-    result = generate_image_handler(
-        x,
-        ckpt_name=os.path.join('SD1.5', 'realisticVisionV60B1_v51VAE.safetensors'),
-        negative_prompt="",
-        fine_edge="disable",
-        grow_size=15,
-        edge_strength=0.55,
-        color_strength=0.55,
-        inpaint_strength=1.0,
-        seed=-1,
-        steps=20,
-        cfg=5.0,
-        sampler_name="euler_ancestral",
-        scheduler="karras"
-    )
+    try:
+        result = generate_image_handler(
+            x,
+            ckpt_name=os.path.join('SD1.5', 'realisticVisionV60B1_v51VAE.safetensors'),
+            negative_prompt="",
+            fine_edge="disable",
+            grow_size=15,
+            edge_strength=0.55,
+            color_strength=0.55,
+            inpaint_strength=1.0,
+            seed=-1,
+            steps=20,
+            cfg=5.0,
+            sampler_name="euler_ancestral",
+            scheduler="karras",
+            model1=model3
+        )
+    finally:
+        # 确保无论是否出错都释放模型
+        unload_model(model3)
+
 
     return JSONResponse(content=result)
 
