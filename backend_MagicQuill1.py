@@ -22,7 +22,9 @@ from fastapi.responses import JSONResponse
 
 AUTO_SAVE = False
 RES = 512
-
+global model1
+model1 = ScribbleColorEditModel()
+model1.to("cpu")
 
 def load_model():
     model = ScribbleColorEditModel()
@@ -193,7 +195,10 @@ app = FastAPI()
 @app.post("/magic_quill/auto_add_brush")
 async def auto_add_brush(request: Request):
     x = await request.json()
-    model3 = load_model()
+    time1 = time.time()
+    model1.to("cuda")
+    time2 = time.time()
+    print(f"Model moved to GPU in {time2 - time1:.2f} seconds.")
     # 调用生成函数
     try:
         result = generate_image_handler(
@@ -210,12 +215,15 @@ async def auto_add_brush(request: Request):
             cfg=5.0,
             sampler_name="euler_ancestral",
             scheduler="karras",
-            model1=model3
+            model1=model1
         )
     finally:
         # 确保无论是否出错都释放模型
-        unload_model(model3)
-
+        model1.to("cpu")
+        torch.cuda.empty_cache()
+        gc.collect()
+    time3 = time.time()
+    print(f"Image generated in {time3 - time2:.2f} seconds.")
 
     return JSONResponse(content=result)
 
