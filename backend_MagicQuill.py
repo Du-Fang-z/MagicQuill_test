@@ -22,8 +22,7 @@ from fastapi.responses import JSONResponse
 
 AUTO_SAVE = False
 RES = 512
-device1 = torch.device("cuda:1")
-model = ScribbleColorEditModel().to(device1)
+model = ScribbleColorEditModel()
 
 
 def tensor_to_base64(tensor):
